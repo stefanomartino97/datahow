@@ -253,6 +253,7 @@ def train_all() -> list[dict]:
         print(f"  RMSE = {result['rmse_mean']:.4f} ± {result['rmse_std']:.4f}")
         print(f"  R²   = {result['r2_mean']:.4f}")
         results.append(result)
+        break
 
     best = min(results, key=lambda r: r["rmse_mean"])
     print(f"\nBest: {best['name']} (RMSE = {best['rmse_mean']:.4f})")

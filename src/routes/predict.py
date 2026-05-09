@@ -1,4 +1,6 @@
-from fastapi import APIRouter, HTTPException, status
+import numpy as np
+import pandas as pd
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field, model_validator
 
 router = APIRouter(tags=["predict"])
@@ -57,9 +59,16 @@ class PredictResponse(BaseModel):
         500: {"description": "Internal server error"},
     },
 )
-def post_predict(payload: PredictRequest) -> PredictResponse:
+def post_predict(payload: PredictRequest, request: Request) -> PredictResponse:
     try:
-        return PredictResponse(titer=0.0)
+        # TODO: replace with real call
+        # TODO: check we fit the model on the whole data
+        # TODO: exponentiate result
+        model = request.app.state.model
+        feature_names = model.feature_names_in_
+        X = pd.DataFrame(np.zeros((1, len(feature_names))), columns=feature_names)
+        log_titer = float(model.predict(X)[0])
+        return PredictResponse(titer=float(np.exp(log_titer)))
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)

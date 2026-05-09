@@ -248,7 +248,7 @@ def train_all() -> list[dict]:
 
     results = []
     for name in model_candidates:
-        print(f"\n=== {name} ===")
+        print(f"\n==================== {name} ==================== ")
         result = train_and_log_candidate_model(name, X, y)
         print(f"  RMSE = {result['rmse_mean']:.4f} ± {result['rmse_std']:.4f}")
         print(f"  R²   = {result['r2_mean']:.4f}")

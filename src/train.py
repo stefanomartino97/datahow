@@ -178,7 +178,7 @@ def train_and_log_candidate_model(name: str, X: pd.DataFrame, y: pd.Series) -> d
 
     Returns:
         Summary dict with ``run_id``, ``name``, ``rmse_mean``, ``rmse_std``,
-        ``r2_mean`` — consumed by :func:`train_all` to pick the best model.
+        ``r2_mean`` - consumed by :func:`train_all` to pick the best model.
     """
     spec = model_candidates[name]
 
@@ -217,6 +217,13 @@ def train_and_log_candidate_model(name: str, X: pd.DataFrame, y: pd.Series) -> d
             name="model",
             input_example=X.iloc[:2],
             serialization_format="skops",
+            skops_trusted_types=[
+                "collections.OrderedDict",
+                "lightgbm.basic.Booster",
+                "lightgbm.sklearn.LGBMRegressor",
+                "xgboost.core.Booster",
+                "xgboost.sklearn.XGBRegressor",
+            ],
         )
         mlflow.log_dict({"feature_columns": list(X.columns)}, "feature_columns.json")
 
@@ -253,7 +260,6 @@ def train_all() -> list[dict]:
         print(f"  RMSE = {result['rmse_mean']:.4f} ± {result['rmse_std']:.4f}")
         print(f"  R²   = {result['r2_mean']:.4f}")
         results.append(result)
-        break
 
     best = min(results, key=lambda r: r["rmse_mean"])
     print(f"\nBest: {best['name']} (RMSE = {best['rmse_mean']:.4f})")

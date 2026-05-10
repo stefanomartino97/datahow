@@ -88,7 +88,7 @@ def test_predict_success(client: TestClient, exp_df: pd.DataFrame) -> None:
 
 
 def test_predict_wrong_schema(client: TestClient) -> None:
-    """W: array length must match timestamps length — mismatch should 422."""
+    """W: array length must match timestamps length - mismatch should 422."""
     payload = {
         "timestamps": [0.0, 1.0, 2.0],
         "values": {

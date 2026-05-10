@@ -3,7 +3,7 @@ import numpy as np
 from src.config import TRAIN_DATA_PATH, TRAIN_TARGETS_PATH
 
 
-def _build_feature_matrix(df: pd.DataFrame) -> pd.DataFrame:
+def build_feature_matrix(df: pd.DataFrame) -> pd.DataFrame:
     """Collapse each experiment's time-series into a single feature row.
 
     For each experiment (one row of the output, indexed by ``Exp``), the following
@@ -138,7 +138,7 @@ def preprocess_raw_data(raw_data_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Ser
     """
 
     titer_by_exp = raw_data_df.dropna(subset=["Y:Titer"]).set_index("Exp")["Y:Titer"]
-    X = _build_feature_matrix(raw_data_df)
+    X = build_feature_matrix(raw_data_df)
     y = np.log(titer_by_exp.loc[X.index]).rename("log_titer")
 
     return X, y

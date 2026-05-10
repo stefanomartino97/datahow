@@ -3,6 +3,8 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field, model_validator
 
+from src.data import build_feature_matrix
+
 router = APIRouter(tags=["predict"])
 
 _ALLOWED_PREFIXES = ("Z:", "W:", "X:")
@@ -17,6 +19,199 @@ class PredictRequest(BaseModel):
             "W: input time series, X: observed time series."
         ),
     )
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "timestamps": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+                "values": {
+                    "Z:FeedStart": [3.0],
+                    "Z:FeedEnd": [11.0],
+                    "Z:FeedRateGlc": [5.473684211],
+                    "Z:FeedRateGln": [6.263157895],
+                    "Z:phStart": [7.473684211],
+                    "Z:phEnd": [6.289473684],
+                    "Z:phShift": [13.0],
+                    "Z:tempStart": [36.26315789],
+                    "Z:tempEnd": [36.94736842],
+                    "Z:tempShift": [10.0],
+                    "Z:Stir": [194.7368421],
+                    "Z:DO": [76.05263158],
+                    "Z:ExpDuration": [14.0],
+                    "W:temp": [
+                        36.26315789,
+                        36.26315789,
+                        36.26315789,
+                        36.26315789,
+                        36.26315789,
+                        36.26315789,
+                        36.26315789,
+                        36.26315789,
+                        36.26315789,
+                        36.26315789,
+                        36.94736842,
+                        36.94736842,
+                        36.94736842,
+                        36.94736842,
+                        36.94736842,
+                    ],
+                    "W:pH": [
+                        7.473684211,
+                        7.473684211,
+                        7.473684211,
+                        7.473684211,
+                        7.473684211,
+                        7.473684211,
+                        7.473684211,
+                        7.473684211,
+                        7.473684211,
+                        7.473684211,
+                        7.473684211,
+                        7.473684211,
+                        7.473684211,
+                        6.289473684,
+                        6.289473684,
+                    ],
+                    "W:FeedGlc": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        5.473684211,
+                        5.473684211,
+                        5.473684211,
+                        5.473684211,
+                        5.473684211,
+                        5.473684211,
+                        5.473684211,
+                        5.473684211,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                    ],
+                    "W:FeedGln": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        6.263157895,
+                        6.263157895,
+                        6.263157895,
+                        6.263157895,
+                        6.263157895,
+                        6.263157895,
+                        6.263157895,
+                        6.263157895,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                    ],
+                    "X:VCD": [
+                        0.546521426,
+                        1.52642442,
+                        3.391525358,
+                        5.450851815,
+                        8.953292054,
+                        14.74039878,
+                        19.66960395,
+                        24.44569962,
+                        26.98111557,
+                        30.0734767,
+                        32.33476876,
+                        34.61011132,
+                        31.90627332,
+                        29.50388441,
+                        27.40298708,
+                    ],
+                    "X:Glc": [
+                        5.641989707,
+                        5.918900191,
+                        5.00440685,
+                        2.87308255,
+                        7.456571107,
+                        9.775066216,
+                        12.17472247,
+                        13.79244482,
+                        15.06410531,
+                        15.88424305,
+                        16.27836663,
+                        16.7229174,
+                        15.34448231,
+                        12.69876831,
+                        9.40848693,
+                    ],
+                    "X:Gln": [
+                        5.546565122,
+                        4.594278416,
+                        2.211346621,
+                        0.0,
+                        1.631148031,
+                        1.298586315,
+                        0.0,
+                        0.058292344,
+                        0.166227846,
+                        0.076252156,
+                        0.143125358,
+                        0.142154302,
+                        0.112451038,
+                        0.024132758,
+                        0.0,
+                    ],
+                    "X:Amm": [
+                        0.1,
+                        0.16448739,
+                        0.647280934,
+                        0.521200891,
+                        1.064386001,
+                        1.75232556,
+                        2.143031564,
+                        2.463444582,
+                        2.771904012,
+                        3.140880107,
+                        3.417891378,
+                        3.633148322,
+                        3.784863139,
+                        3.722902708,
+                        3.574253366,
+                    ],
+                    "X:Lac": [
+                        0.1,
+                        0.454304279,
+                        1.557714864,
+                        2.766574382,
+                        4.357631881,
+                        5.941497192,
+                        6.971811041,
+                        5.488813225,
+                        4.924379073,
+                        5.377594972,
+                        5.63580681,
+                        4.754815534,
+                        4.255638274,
+                        3.600089071,
+                        3.580613423,
+                    ],
+                    "X:Lysed": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.008259313,
+                        0.003444543,
+                        0.016012977,
+                        0.020569587,
+                        0.035088543,
+                        0.056937534,
+                        0.104036649,
+                        0.174492602,
+                        0.247210871,
+                        0.393759333,
+                    ],
+                },
+            }
+        }
+    }
 
     @model_validator(mode="after")
     def _check_shape(self) -> "PredictRequest":
@@ -61,14 +256,26 @@ class PredictResponse(BaseModel):
 )
 def post_predict(payload: PredictRequest, request: Request) -> PredictResponse:
     try:
-        # TODO: replace with real call
-        # TODO: check we fit the model on the whole data
-        # TODO: exponentiate result
+        long_df = pd.DataFrame({"Time[day]": payload.timestamps, "Exp": "predict"})
+        for key, arr in payload.values.items():
+            long_df[key] = arr[0] if key.startswith("Z:") else arr
+
+        features = build_feature_matrix(long_df)
+
         model = request.app.state.model
-        feature_names = model.feature_names_in_
-        X = pd.DataFrame(np.zeros((1, len(feature_names))), columns=feature_names)
+        feature_names = list(model.feature_names_in_)
+        missing = [c for c in feature_names if c not in features.columns]
+        if missing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Payload is missing inputs required by the model: {missing}",
+            )
+
+        X = features.reindex(columns=feature_names)
         log_titer = float(model.predict(X)[0])
         return PredictResponse(titer=float(np.exp(log_titer)))
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)

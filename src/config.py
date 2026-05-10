@@ -7,6 +7,8 @@ PROJECT_FOLDER = SRC_FOLDER.parent
 DATA_FOLDER = PROJECT_FOLDER / "data"
 TRAIN_DATA_PATH = DATA_FOLDER / "datahow_interview_train_data.csv"
 TRAIN_TARGETS_PATH = DATA_FOLDER / "datahow_interview_train_targets.csv"
+TEST_DATA_PATH = DATA_FOLDER / "datahow_interview_test_data.csv"
+TEST_TARGETS_PATH = DATA_FOLDER / "datahow_interview_test_targets.csv"
 
 
 class Settings(BaseSettings):

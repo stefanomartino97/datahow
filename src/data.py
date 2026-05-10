@@ -1,6 +1,13 @@
+from typing import Literal
+
 import pandas as pd
 import numpy as np
-from src.config import TRAIN_DATA_PATH, TRAIN_TARGETS_PATH
+from src.config import (
+    TEST_DATA_PATH,
+    TEST_TARGETS_PATH,
+    TRAIN_DATA_PATH,
+    TRAIN_TARGETS_PATH,
+)
 
 
 def build_feature_matrix(df: pd.DataFrame) -> pd.DataFrame:
@@ -92,14 +99,26 @@ def build_feature_matrix(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows).set_index("Exp")
 
 
-def load_raw_data() -> pd.DataFrame:
-    """Load and merge the training features and targets into a single DataFrame.
+def load_raw_data(
+    split: Literal["train", "test", "train_test"] = "train",
+) -> pd.DataFrame:
+    """Load and merge the features and targets for a given split.
 
-    Reads the variables CSV from ``TRAIN_DATA_PATH`` and the targets CSV from
-    ``TRAIN_TARGETS_PATH``, drops the ``RowID`` column from each, and
-    outer-joins them on ``Exp`` and ``Time[day]`` so rows present in only one
-    file are preserved (e.g. titer measurements taken at timepoints not in
-    the variables file).
+    Reads the variables CSV and the targets CSV for the requested split,
+    drops the ``RowID`` column from each, and outer-joins them on ``Exp``
+    and ``Time[day]`` so rows present in only one file are preserved (e.g.
+    titer measurements taken at timepoints not in the variables file).
+
+    When ``split="train_test"``, the train and test long-form frames are
+    loaded independently and concatenated row-wise. ``Exp`` values are
+    disjoint across splits, so no key collisions occur.
+
+    Args:
+        split: Which split to load. ``"train"`` reads
+            ``TRAIN_DATA_PATH``/``TRAIN_TARGETS_PATH``, ``"test"`` reads
+            ``TEST_DATA_PATH``/``TEST_TARGETS_PATH`` (the test targets file
+            is a template with placeholder values), and ``"train_test"``
+            returns the concatenation of the two.
 
     Returns:
         Long-form dataframe with one row per (``Exp``, ``Time[day]``) pair,
@@ -107,12 +126,21 @@ def load_raw_data() -> pd.DataFrame:
         ``Y:Titer`` target column. Cells without a corresponding measurement
         in the source CSV are ``NaN``.
     """
-    train_df = pd.read_csv(TRAIN_DATA_PATH).drop(columns="RowID")
-    targets_df = pd.read_csv(TRAIN_TARGETS_PATH).drop(columns="RowID")
+    paths = {
+        "train": (TRAIN_DATA_PATH, TRAIN_TARGETS_PATH),
+        "test": (TEST_DATA_PATH, TEST_TARGETS_PATH),
+    }
 
-    df = pd.merge(train_df, targets_df, how="outer", on=["Exp", "Time[day]"])
+    if split == "train_test":
+        return pd.concat(
+            [load_raw_data("train"), load_raw_data("test")], ignore_index=True
+        )
 
-    return df
+    data_path, targets_path = paths[split]
+    data_df = pd.read_csv(data_path).drop(columns="RowID")
+    targets_df = pd.read_csv(targets_path).drop(columns="RowID")
+
+    return pd.merge(data_df, targets_df, how="outer", on=["Exp", "Time[day]"])
 
 
 def preprocess_raw_data(raw_data_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
@@ -145,7 +173,9 @@ def preprocess_raw_data(raw_data_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Ser
 
 
 if __name__ == "__main__":
-    raw_data_df = load_raw_data()
+    raw_data_df = load_raw_data(split="train")
+    print(raw_data_df.shape)
+
     X, y = preprocess_raw_data(raw_data_df)
     print(X.shape)
     print(y.shape)

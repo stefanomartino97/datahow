@@ -33,4 +33,5 @@ def predict_titer(model: Pipeline, raw_df: pd.DataFrame) -> float:
 
     X = features.reindex(columns=feature_names)
     log_titer = float(model.predict(X)[0])
+
     return float(np.exp(log_titer))

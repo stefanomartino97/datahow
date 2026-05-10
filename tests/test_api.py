@@ -5,7 +5,6 @@ import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 
-from src.config import TRAIN_DATA_PATH
 from src.data import build_feature_matrix
 
 
@@ -22,10 +21,24 @@ class StubModel:
 
 @pytest.fixture(scope="module")
 def exp_df() -> pd.DataFrame:
-    """One real experiment loaded the same way as notebooks/04_test_endpoint.ipynb."""
-    train_df = pd.read_csv(TRAIN_DATA_PATH).drop(columns="RowID")
-    return (
-        train_df.query("Exp == 'Exp 1'").sort_values("Time[day]").reset_index(drop=True)
+    """Synthetic single-experiment dataframe shaped like the training data.
+
+    Same column-prefix convention as the real CSV (Z: scalars filled at day 0,
+    W:/X: time-series filled at every timestep), so build_feature_matrix and
+    the /predict request schema both treat it the same way.
+    """
+    n = 5
+    times = np.arange(n, dtype=float)
+    return pd.DataFrame(
+        {
+            "Exp": ["Exp 1"] * n,
+            "Time[day]": times,
+            "Z:Temp": [37.0] + [np.nan] * (n - 1),
+            "Z:Duration": [float(n - 1)] + [np.nan] * (n - 1),
+            "W:FeedGlc": np.linspace(0.0, 5.0, n),
+            "X:VCD": np.linspace(1.0, 10.0, n),
+            "X:Glc": np.linspace(5.0, 1.0, n),
+        }
     )
 
 

@@ -33,15 +33,15 @@ def _make_search(
 ) -> GridSearchCV | RandomizedSearchCV:
     """Build a CV hyperparameter searcher for a candidate pipeline.
 
-    Uses :class:`GridSearchCV` when ``n_iter`` is ``None``, otherwise
-    :class:`RandomizedSearchCV` with ``n_iter`` sampled configurations.
+    Uses :class:`GridSearchCV` when 'n_iter' is 'None', otherwise
+    :class:`RandomizedSearchCV` with 'n_iter' sampled configurations.
 
     Args:
-        factory: Zero-arg callable returning a fresh ``sklearn`` ``Pipeline``.
+        factory: Zero-arg callable returning a fresh 'sklearn' 'Pipeline'.
         param_grid: Hyperparameter search space (lists for grid, lists or
             scipy.stats distributions for randomized).
         inner_cv: :class:`KFold` splitter used to score each configuration.
-        n_iter: Number of randomized samples, or ``None`` for grid search.
+        n_iter: Number of randomized samples, or 'None' for grid search.
         seed: Random seed for :class:`RandomizedSearchCV` (ignored for grid).
 
     Returns:
@@ -78,23 +78,23 @@ def repeated_nested_cv(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Estimate model performance with repeated nested 5-fold CV.
 
-    Runs outer 5-fold CV ``n_seeds`` times (different shuffle each repeat).
+    Runs outer 5-fold CV 'n_seeds' times (different shuffle each repeat).
     On every outer split, an inner 5-fold CV picks the hyperparameters; the
     chosen model is scored on the held-out outer fold. Nesting the HP search
     keeps the reported metrics free of selection bias.
 
     Args:
-        factory: Zero-arg callable returning a fresh ``sklearn`` ``Pipeline``.
+        factory: Zero-arg callable returning a fresh 'sklearn' 'Pipeline'.
         param_grid: Hyperparameter search space.
         X: Feature matrix.
-        y: Target series aligned to ``X``.
-        n_seeds: Number of outer-CV repeats. Defaults to ``settings.n_seeds``.
-        n_iter: ``None`` for grid search, otherwise number of randomized
+        y: Target series aligned to 'X'.
+        n_seeds: Number of outer-CV repeats. Defaults to 'settings.n_seeds'.
+        n_iter: 'None' for grid search, otherwise number of randomized
             configurations.
 
     Returns:
-        ``(rmse, r2)`` arrays of length ``n_seeds x 5`` with the per-fold
-        scores. Aggregate with ``.mean()`` / ``.std()``.
+        '(rmse, r2)' arrays of length 'n_seeds x 5' with the per-fold
+        scores. Aggregate with '.mean()' / '.std()'.
     """
     inner_cv = KFold(
         n_splits=settings.n_kfold_splits,
@@ -130,20 +130,20 @@ def fit_final(
     """Fit the final model on all training data with HPs picked by inner CV.
 
     Runs a single 5-fold CV hyperparameter search and returns the best
-    estimator refit on the full ``(X, y)``. Call once per candidate after
+    estimator refit on the full '(X, y)'. Call once per candidate after
     :func:`repeated_nested_cv` has produced the unbiased performance estimate.
 
     Args:
-        factory: Zero-arg callable returning a fresh ``sklearn`` ``Pipeline``.
+        factory: Zero-arg callable returning a fresh 'sklearn' 'Pipeline'.
         param_grid: Hyperparameter search space.
         X: Feature matrix to fit on.
-        y: Target series aligned to ``X``.
-        n_iter: ``None`` for grid search, otherwise number of randomized
+        y: Target series aligned to 'X'.
+        n_iter: 'None' for grid search, otherwise number of randomized
             configurations.
 
     Returns:
-        ``(best_estimator, best_params)``: the refit pipeline and the chosen
-        hyperparameters (keys use the ``model__<param>`` form).
+        '(best_estimator, best_params)': the refit pipeline and the chosen
+        hyperparameters (keys use the 'model__<param>' form).
     """
     inner_cv = KFold(
         n_splits=settings.n_kfold_splits,
@@ -168,18 +168,18 @@ def train_and_log_candidate_model(name: str, X: pd.DataFrame, y: pd.Series) -> d
     Looks up the spec in :data:`src.models.model_candidates`, runs
     :func:`repeated_nested_cv` for unbiased RMSE/R² and :func:`fit_final` for
     the deployable pipeline, and records both inside a single MLflow run.
-    Logged: ``model``/``n_features``/``n_samples``/``n_seeds`` and
-    ``best_<param>`` params; ``rmse_mean``/``rmse_std``/``r2_mean``/``r2_std``
-    metrics; the fitted pipeline plus ``feature_columns.json``.
+    Logged: 'model'/'n_features'/'n_samples'/'n_seeds' and
+    'best_<param>' params; 'rmse_mean'/'rmse_std'/'r2_mean'/'r2_std'
+    metrics; the fitted pipeline plus 'feature_columns.json'.
 
     Args:
         name: Key into :data:`src.models.model_candidates`.
         X: Feature matrix from :func:`src.data.preprocess_raw_data`.
-        y: Target series aligned to ``X`` (log-titer).
+        y: Target series aligned to 'X' (log-titer).
 
     Returns:
-        Summary dict with ``run_id``, ``name``, ``rmse_mean``, ``rmse_std``,
-        ``r2_mean`` - consumed by :func:`train_all` to pick the best model.
+        Summary dict with 'run_id', 'name', 'rmse_mean', 'rmse_std',
+        'r2_mean' - consumed by :func:`train_all` to pick the best model.
     """
     spec = model_candidates[name]
 
@@ -242,7 +242,7 @@ def train_all() -> list[dict]:
 
     Loads and preprocesses the data once, trains each candidate in
     :data:`src.models.model_candidates` (one MLflow run per candidate), and
-    tags the lowest-RMSE run with ``best=true`` so inference can find it.
+    tags the lowest-RMSE run with 'best=true' so inference can find it.
 
     Returns:
         List of per-candidate summary dicts (in training order), as returned
@@ -276,11 +276,11 @@ def retrain_best_on_full_data() -> tuple[Pipeline, dict]:
     Loads the best pipeline (and its metadata) via
     :func:`src.inference.get_best_model`, then refits it on the
     concatenation of the train and test splits returned by
-    :func:`src.data.load_raw_data` with ``split="train_test"``. The
+    :func:`src.data.load_raw_data` with 'split="train_test"'. The
     pipeline's hyperparameters are preserved; only the fit changes.
 
     Returns:
-        ``(refit_pipeline, metadata)``: the pipeline refit on the full
+        '(refit_pipeline, metadata)': the pipeline refit on the full
         dataset, paired with the metadata dict from :func:`get_best_model`.
     """
     model, metadata = get_best_model(settings.mlflow_experiment_name)

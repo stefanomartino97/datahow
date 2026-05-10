@@ -1,9 +1,8 @@
-import numpy as np
 import pandas as pd
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field, model_validator
 
-from src.data import build_feature_matrix
+from src.inference import predict_titer
 
 router = APIRouter(tags=["predict"])
 
@@ -256,26 +255,17 @@ class PredictResponse(BaseModel):
 )
 def post_predict(payload: PredictRequest, request: Request) -> PredictResponse:
     try:
-        long_df = pd.DataFrame({"Time[day]": payload.timestamps, "Exp": "predict"})
+        raw_df = pd.DataFrame({"Time[day]": payload.timestamps, "Exp": "predict"})
         for key, arr in payload.values.items():
-            long_df[key] = arr[0] if key.startswith("Z:") else arr
-
-        features = build_feature_matrix(long_df)
+            raw_df[key] = arr[0] if key.startswith("Z:") else arr
 
         model = request.app.state.model
-        feature_names = list(model.feature_names_in_)
-        missing = [c for c in feature_names if c not in features.columns]
-        if missing:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Payload is missing inputs required by the model: {missing}",
-            )
-
-        X = features.reindex(columns=feature_names)
-        log_titer = float(model.predict(X)[0])
-        return PredictResponse(titer=float(np.exp(log_titer)))
-    except HTTPException:
-        raise
+        titer = predict_titer(model=model, raw_df=raw_df)
+        return PredictResponse(titer=titer)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)

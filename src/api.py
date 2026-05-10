@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from src.config import settings
-from src.inference import get_best_model
+from src.models import get_best_model
 from src.routes import health_router, predict_router
 
 logger = logging.getLogger(__name__)
@@ -16,7 +16,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     model, metadata = get_best_model(settings.mlflow_experiment_name)
     app.state.model = model
     app.state.model_metadata = metadata
-    logger.info("Loaded model from experiment '%s': %s", settings.mlflow_experiment_name, metadata)
+    logger.info(
+        "Loaded model from experiment '%s': %s",
+        settings.mlflow_experiment_name,
+        metadata,
+    )
     yield
 
 

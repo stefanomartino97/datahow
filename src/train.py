@@ -15,6 +15,7 @@ from sklearn.model_selection import (
 )
 from sklearn.pipeline import Pipeline
 from src.config import settings
+from src.models import get_best_model
 from src.models import model_candidates
 
 warnings.filterwarnings("ignore", message=".*does not have valid feature names.*")
@@ -269,5 +270,27 @@ def train_all() -> list[dict]:
     return results
 
 
+def retrain_best_on_full_data() -> tuple[Pipeline, dict]:
+    """Retrain the lowest-RMSE MLflow model on train + test combined.
+
+    Loads the best pipeline (and its metadata) via
+    :func:`src.inference.get_best_model`, then refits it on the
+    concatenation of the train and test splits returned by
+    :func:`src.data.load_raw_data` with ``split="train_test"``. The
+    pipeline's hyperparameters are preserved; only the fit changes.
+
+    Returns:
+        ``(refit_pipeline, metadata)``: the pipeline refit on the full
+        dataset, paired with the metadata dict from :func:`get_best_model`.
+    """
+    model, metadata = get_best_model(settings.mlflow_experiment_name)
+    raw_data_df = load_raw_data(split="train_test")
+    X, y = preprocess_raw_data(raw_data_df)
+    model.fit(X, y)
+
+    return model, metadata
+
+
 if __name__ == "__main__":
     train_all()
+    # model, metadata = retrain_best_on_full_data()

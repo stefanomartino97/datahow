@@ -1,3 +1,4 @@
+import argparse
 import logging
 import warnings
 from collections.abc import Callable
@@ -162,6 +163,45 @@ def fit_final(
     return search.best_estimator_, search.best_params_
 
 
+def _log_pipeline_artifacts(
+    model_name: str,
+    pipeline: Pipeline,
+    X: pd.DataFrame,
+    y: pd.Series,
+) -> None:
+    """Log the shared MLflow artifacts inside the active run.
+
+    Records the model/n_features/n_samples params, the fitted
+    sklearn pipeline (serialized with skops, with the trusted-types list
+    needed by lightgbm/xgboost boosters), and feature_columns.json.
+
+    Args:
+        model_name: Value for the model param.
+        pipeline: Fitted sklearn pipeline to log under the artifact name
+            "model".
+        X: Feature matrix used to derive n_features, the input example,
+            and the column list.
+        y: Target series used to derive n_samples.
+    """
+    mlflow.log_param("model", model_name)
+    mlflow.log_param("n_features", X.shape[1])
+    mlflow.log_param("n_samples", len(y))
+    mlflow.sklearn.log_model(
+        pipeline,
+        name="model",
+        input_example=X.iloc[:2],
+        serialization_format="skops",
+        skops_trusted_types=[
+            "collections.OrderedDict",
+            "lightgbm.basic.Booster",
+            "lightgbm.sklearn.LGBMRegressor",
+            "xgboost.core.Booster",
+            "xgboost.sklearn.XGBRegressor",
+        ],
+    )
+    mlflow.log_dict({"feature_columns": list(X.columns)}, "feature_columns.json")
+
+
 def train_and_log_candidate_model(name: str, X: pd.DataFrame, y: pd.Series) -> dict:
     """Train one candidate model end-to-end and log it to MLflow.
 
@@ -200,9 +240,7 @@ def train_and_log_candidate_model(name: str, X: pd.DataFrame, y: pd.Series) -> d
             n_iter=spec["n_iter"],
         )
 
-        mlflow.log_param("model", name)
-        mlflow.log_param("n_features", X.shape[1])
-        mlflow.log_param("n_samples", len(y))
+        _log_pipeline_artifacts(model_name=name, pipeline=final_pipe, X=X, y=y)
         mlflow.log_param("n_seeds", settings.n_seeds)
 
         for k, v in best_params.items():
@@ -212,21 +250,6 @@ def train_and_log_candidate_model(name: str, X: pd.DataFrame, y: pd.Series) -> d
         mlflow.log_metric("rmse_std", float(rmse.std()))
         mlflow.log_metric("r2_mean", float(r2.mean()))
         mlflow.log_metric("r2_std", float(r2.std()))
-
-        mlflow.sklearn.log_model(
-            final_pipe,
-            name="model",
-            input_example=X.iloc[:2],
-            serialization_format="skops",
-            skops_trusted_types=[
-                "collections.OrderedDict",
-                "lightgbm.basic.Booster",
-                "lightgbm.sklearn.LGBMRegressor",
-                "xgboost.core.Booster",
-                "xgboost.sklearn.XGBRegressor",
-            ],
-        )
-        mlflow.log_dict({"feature_columns": list(X.columns)}, "feature_columns.json")
 
         return {
             "run_id": run.info.run_id,
@@ -265,32 +288,84 @@ def train_all() -> list[dict]:
     best = min(results, key=lambda r: r["rmse_mean"])
     print(f"\nBest: {best['name']} (RMSE = {best['rmse_mean']:.4f})")
     client = mlflow.tracking.MlflowClient()
-    client.set_tag(best["run_id"], "best", "true")
+    client.set_tag(best["run_id"], "stage", "cv_best")
 
     return results
 
 
 def retrain_best_on_full_data() -> tuple[Pipeline, dict]:
-    """Retrain the lowest-RMSE MLflow model on train + test combined.
+    """Refit the CV-best model on train+test and log it as the production run.
 
-    Loads the best pipeline (and its metadata) via
-    :func:`src.inference.get_best_model`, then refits it on the
-    concatenation of the train and test splits returned by
-    :func:`src.data.load_raw_data` with 'split="train_test"'. The
-    pipeline's hyperparameters are preserved; only the fit changes.
-
+    Loads the run tagged stage="cv_best" (its pipeline carries the CV-
+    selected hyperparameters), refits the pipeline on the concatenation of
+    the train and test splits returned by :func:`src.data.load_raw_data`
+    with split="train_test", then logs the result as a new MLflow run
+    tagged stage="production". Any previous production run is demoted
+    (tag removed) so :func:`src.models.get_best_model` with
+    stage="production" always resolves to this refit.
+    The hyperparameters are preserved; only the fit changes.
+    The production run stores source_run_id as a param pointing back to
+    the CV-best run it was seeded from.
     Returns:
-        '(refit_pipeline, metadata)': the pipeline refit on the full
-        dataset, paired with the metadata dict from :func:`get_best_model`.
+        (refit_pipeline, metadata): the pipeline refit on the full
+        dataset, paired with the metadata dict for the new production run.
     """
-    model, metadata = get_best_model(settings.mlflow_experiment_name)
+    mlflow.set_experiment(settings.mlflow_experiment_name)
+    print("Loading CV-best model...")
+    model, source_metadata = get_best_model(
+        settings.mlflow_experiment_name, stage="cv_best"
+    )
+    print(
+        f"  Loaded {source_metadata['model_name']} "
+        f"(source run_id={source_metadata['run_id']})"
+    )
     raw_data_df = load_raw_data(split="train_test")
     X, y = preprocess_raw_data(raw_data_df)
+    print(f"Refitting on full data: X={X.shape}, y={y.shape}")
     model.fit(X, y)
 
+    client = mlflow.tracking.MlflowClient()
+    experiment = client.get_experiment_by_name(settings.mlflow_experiment_name)
+    # Delete any prior production run so the API's lifespan always loads this refit
+    for prev in client.search_runs(
+        experiment_ids=[experiment.experiment_id],
+        filter_string="tags.stage = 'production'",
+    ):
+        client.delete_tag(prev.info.run_id, "stage")
+
+    run_name = f"{source_metadata['model_name']}_production"
+    with mlflow.start_run(run_name=run_name) as run:
+        _log_pipeline_artifacts(
+            model_name=source_metadata["model_name"],
+            pipeline=model,
+            X=X,
+            y=y,
+        )
+        mlflow.log_param("source_run_id", source_metadata["run_id"])
+        mlflow.set_tag("stage", "production")
+        production_run_id = run.info.run_id
+
+    print(f"Logged production run: {production_run_id}")
+
+    metadata = {
+        "run_id": production_run_id,
+        "stage": "production",
+        "model_name": source_metadata["model_name"],
+        "source_run_id": source_metadata["run_id"],
+    }
     return model, metadata
 
 
 if __name__ == "__main__":
-    train_all()
-    # model, metadata = retrain_best_on_full_data()
+    parser = argparse.ArgumentParser(description="Train models or refit the CV-best.")
+    parser.add_argument(
+        "mode",
+        choices=["train_all", "retrain_best"],
+        help="train_all: CV over all candidates; retrain_best: refit CV-best on full data.",
+    )
+    args = parser.parse_args()
+
+    if args.mode == "train_all":
+        train_all()
+    else:
+        retrain_best_on_full_data()

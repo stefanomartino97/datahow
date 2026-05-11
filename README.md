@@ -44,11 +44,20 @@ uv sync
 # (optional) browse runs in MLflow
 uv run mlflow ui --backend-store-uri sqlite:///mlflow.db
 
-# train every candidate, log to MLflow, tag the best run
-uv run python -m src.train
+# train every candidate, log to MLflow, tag the CV-best run
+uv run python -m src.train train_all
+
+# refit the CV-best on train+test and log it as the production run
+uv run python -m src.train retrain_best
 ```
 
-`src/train.py` runs repeated nested 5-fold CV for each candidate in `src.models.model_candidates`, fits the final pipeline on all training data, and logs hyperparameters, metrics (`rmse_mean`, `rmse_std`, `r2_mean`, `r2_std`), the fitted sklearn pipeline, and the feature-column manifest to MLflow. The lowest-RMSE run is tagged `best=true` so `src/inference.py` can resolve it at serving time.
+`src/train.py` exposes two modes. `train_all` runs repeated nested 5-fold CV for each candidate in `src.models.model_candidates`, fits the final pipeline on the training split, and logs hyperparameters, metrics (`rmse_mean`, `rmse_std`, `r2_mean`, `r2_std`), the fitted sklearn pipeline, and the feature-column manifest to MLflow; the lowest-RMSE run is tagged `stage=cv_best`. `retrain_best` loads that CV-best pipeline, refits it on the concatenation of the train and test splits, and logs the result as a new run tagged `stage=production` so `src/inference.py` can resolve it at serving time.
+
+## Serving (Docker, current state)
+
+The `Dockerfile` builds the FastAPI app and exposes `/predict` on port 8000, but **the container cannot currently load the trained model**. Training is run locally and MLflow is configured with a SQLite backend (`mlflow.db`) and the default local-file artifact store (`mlartifacts/`); the artifact URIs MLflow bakes into the DB are absolute host paths (e.g. `C:/Users/.../mlartifacts/...`) that a Linux container can't resolve even with the directory bind-mounted. The image therefore builds and starts, but `get_best_model` fails at startup because the `stage=production` run's artifacts aren't reachable from inside the container.
+
+**Next step: external MLflow backend.** Stand up a remote tracking server (e.g. an EC2 / ECS-hosted `mlflow server` process) backed by a managed database for the tracking store (RDS PostgreSQL) and an object store for artifacts (S3). Training and the API both point at it via `MLFLOW_TRACKING_URI=http://...` and `MLFLOW_S3_ENDPOINT_URL` / `AWS_*` credentials; artifact URIs become `s3://...` and resolve identically from any host. That decouples model storage from the container filesystem, lets training and serving live on different machines, and makes `stage=production` promotion a server-side tag flip rather than a local-files concern.
 
 ## AI use
 

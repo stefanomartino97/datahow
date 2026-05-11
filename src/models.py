@@ -1,3 +1,5 @@
+from typing import Literal
+
 from lightgbm import LGBMRegressor
 from scipy.stats import loguniform, randint, uniform
 from sklearn.cross_decomposition import PLSRegression
@@ -9,16 +11,36 @@ from src.config import settings
 import mlflow
 
 
-def get_best_model(experiment_name: str) -> tuple[Pipeline, dict]:
-    """Load the lowest-RMSE model from `experiment_name` along with its metadata.
+def get_best_model(
+    experiment_name: str,
+    stage: Literal["cv_best", "production"] = "cv_best",
+) -> tuple[Pipeline, dict]:
+    """Load a tagged model from `experiment_name` along with its metadata.
+
+    Two stages are supported:
+
+    * "cv_best" returns the candidate with the lowest nested-CV RMSE —
+      the run tagged stage=cv_best by :func:`src.train.train_all`. Used
+      for comparing candidates and as the seed for the full-data refit.
+    * "production" returns the model refit on train+test combined — the
+      run tagged stage=production by
+      :func:`src.train.retrain_best_on_full_data`. Used by the serving API.
+
+    `model.predict(X)` returns predictions on log Y:Titer; exponentiate for
+    titer-space predictions.
+
+    Args:
+        experiment_name: MLflow experiment to search.
+        stage: Which tagged run to load.
 
     Returns:
-        (model, metadata) where metadata carries the run id, model name, and CV
-        metrics. `model.predict(X)` returns predictions on log Y:Titer; exponentiate
-        for titer-space predictions.
+        (model, metadata). For "cv_best" the metadata carries CV
+        metrics; for "production" it also carries source_run_id
+        pointing back to the CV run the refit was seeded from.
 
     Raises:
-        ValueError: if the experiment doesn't exist or has no runs.
+        ValueError: if the experiment doesn't exist or no run carries the
+            requested stage tag.
     """
     client = mlflow.tracking.MlflowClient()
     experiment = client.get_experiment_by_name(experiment_name)
@@ -26,22 +48,32 @@ def get_best_model(experiment_name: str) -> tuple[Pipeline, dict]:
     if experiment is None:
         raise ValueError(f"MLflow experiment '{experiment_name}' not found")
 
+    order_by = (
+        ["metrics.rmse_mean ASC"]
+        if stage == "cv_best"
+        else ["attributes.start_time DESC"]
+    )
     runs = client.search_runs(
         experiment_ids=[experiment.experiment_id],
-        order_by=["metrics.rmse_mean ASC"],
+        filter_string=f"tags.stage = '{stage}'",
+        order_by=order_by,
         max_results=1,
     )
     if not runs:
-        raise ValueError(f"No runs in MLflow experiment '{experiment_name}'")
+        raise ValueError(
+            f"No run tagged stage='{stage}' in MLflow experiment '{experiment_name}'"
+        )
 
     best = runs[0]
     model = mlflow.sklearn.load_model(f"runs:/{best.info.run_id}/model")
     metadata = {
         "run_id": best.info.run_id,
+        "stage": stage,
         "model_name": best.data.params.get("model"),
         "rmse_mean": best.data.metrics.get("rmse_mean"),
         "rmse_std": best.data.metrics.get("rmse_std"),
         "r2_mean": best.data.metrics.get("r2_mean"),
+        "source_run_id": best.data.params.get("source_run_id"),
     }
 
     return model, metadata

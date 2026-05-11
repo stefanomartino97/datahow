@@ -13,7 +13,9 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    model, metadata = get_best_model(settings.mlflow_experiment_name)
+    model, metadata = get_best_model(
+        settings.mlflow_experiment_name, stage="production"
+    )
     app.state.model = model
     app.state.model_metadata = metadata
     logger.info(

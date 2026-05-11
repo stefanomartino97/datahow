@@ -22,6 +22,10 @@ ENV PATH="/app/.venv/bin:$PATH" \
 
 WORKDIR /app
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN groupadd --system app && useradd --system --gid app --no-create-home app
 
 COPY --from=builder --chown=app:app /app/.venv /app/.venv

@@ -44,11 +44,14 @@ uv sync
 # (optional) browse runs in MLflow
 uv run mlflow ui --backend-store-uri sqlite:///mlflow.db
 
-# train every candidate, log to MLflow, tag the best run
-uv run python -m src.train
+# train every candidate, log to MLflow, tag the CV-best run
+uv run python -m src.train train_all
+
+# refit the CV-best on train+test and log it as the production run
+uv run python -m src.train retrain_best
 ```
 
-`src/train.py` runs repeated nested 5-fold CV for each candidate in `src.models.model_candidates`, fits the final pipeline on all training data, and logs hyperparameters, metrics (`rmse_mean`, `rmse_std`, `r2_mean`, `r2_std`), the fitted sklearn pipeline, and the feature-column manifest to MLflow. The lowest-RMSE run is tagged `best=true` so `src/inference.py` can resolve it at serving time.
+`src/train.py` exposes two modes. `train_all` runs repeated nested 5-fold CV for each candidate in `src.models.model_candidates`, fits the final pipeline on the training split, and logs hyperparameters, metrics (`rmse_mean`, `rmse_std`, `r2_mean`, `r2_std`), the fitted sklearn pipeline, and the feature-column manifest to MLflow; the lowest-RMSE run is tagged `stage=cv_best`. `retrain_best` loads that CV-best pipeline, refits it on the concatenation of the train and test splits, and logs the result as a new run tagged `stage=production` so `src/inference.py` can resolve it at serving time.
 
 ## AI use
 
